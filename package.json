@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "A minimal unique ID generator for TypeScript.",
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "author": "Karl Ostendorf <karl@ostendorf.com>",
   "license": "MIT",
@@ -29,9 +32,23 @@
     "lint:eslint": "eslint .",
     "lint:types": "tsc -p tsconfig.json",
     "test": "tsx --test 'src/**/*.test.ts'",
-    "example": "tsx examples/basic.ts"
+    "example": "tsx examples/basic.ts",
+    "prepack": "npm run build"
   },
-  "keywords": [],
+  "keywords": [
+    "id",
+    "unique-id",
+    "snowflake",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kwo/crystal-ts.git"
+  },
+  "homepage": "https://github.com/kwo/crystal-ts#readme",
+  "bugs": {
+    "url": "https://github.com/kwo/crystal-ts/issues"
+  },
   "engines": {
     "node": ">=22"
   },
