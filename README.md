@@ -77,10 +77,10 @@ npm install @kwo1/crystal
 ### Usage (TypeScript)
 
 ```ts
-import { Generator } from '@kwo1/crystal';
+import { Crystal } from '@kwo1/crystal';
 
-const gen = new Generator();
-const id = gen.generate();
+const crystal = new Crystal();
+const id = crystal.newId();
 
 console.log('ID (base32):', id.toString());
 console.log('ID (hex):   ', id.toHex());
@@ -96,24 +96,24 @@ Defaults (no configuration required):
 - **timeBits**: `42` (allowed range when overridden: `40..48`)
 
 ```ts
-import { Generator } from '@kwo1/crystal';
+import { Crystal } from '@kwo1/crystal';
 
 // Uses default epoch (2020-01-01T00:00:00.000Z) and default timeBits (42)
-const gen = new Generator();
-const id = gen.generate();
+const crystal = new Crystal();
+const id = crystal.newId();
 ```
 
 Override only when you need a different layout:
 
 ```ts
-import { Generator } from '@kwo1/crystal';
+import { Crystal } from '@kwo1/crystal';
 
-const gen = new Generator({
+const crystal = new Crystal({
   epoch: new Date('2020-01-01T00:00:00.000Z'),
   timeBits: 42,
 });
 
-const id = gen.generate();
+const id = crystal.newId();
 ```
 
 ### Parsing

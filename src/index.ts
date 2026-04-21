@@ -133,7 +133,7 @@ export class ID {
   }
 }
 
-export class Generator {
+export class Crystal {
   readonly #epochMillis: number;
   readonly #timeBits: number;
   readonly #timeShift: bigint;
@@ -170,7 +170,7 @@ export class Generator {
     return this.#timeBits;
   }
 
-  public generate(): ID {
+  public newId(): ID {
     let now = this.epochMillisNow();
 
     if (now < this.#lastMillis) {

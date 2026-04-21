@@ -1,13 +1,13 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_EPOCH_MILLIS, DEFAULT_TIME_BITS, Generator, ID } from './index.js';
+import { Crystal, DEFAULT_EPOCH_MILLIS, DEFAULT_TIME_BITS, ID } from './index.js';
 
 const generationCount = 1_000;
 
 describe('crystal', { concurrency: false }, () => {
   test('generates unique and increasing IDs', () => {
-    const generator = new Generator();
-    const ids = Array.from({ length: generationCount }, () => generator.generate());
+    const crystal = new Crystal();
+    const ids = Array.from({ length: generationCount }, () => crystal.newId());
 
     const seen = new Set(ids.map((id) => id.toBigInt().toString()));
     assert.equal(seen.size, ids.length);
@@ -22,7 +22,7 @@ describe('crystal', { concurrency: false }, () => {
   });
 
   test('ID exposes string and integer representations', () => {
-    const id = new Generator().generate();
+    const id = new Crystal().newId();
 
     assert.ok(id.toString().length > 0);
     assert.equal(id.toHex().length, 16);
@@ -31,7 +31,7 @@ describe('crystal', { concurrency: false }, () => {
   });
 
   test('parses base32 and hex IDs', () => {
-    const id = new Generator().generate();
+    const id = new Crystal().newId();
 
     assert.equal(ID.parseString(id.toString()).toBigInt(), id.toBigInt());
     assert.equal(ID.parseBase32(id.base32()).toBigInt(), id.toBigInt());
@@ -58,42 +58,42 @@ describe('crystal', { concurrency: false }, () => {
 
   test('supports constructor options for epoch and timeBits', () => {
     const customEpochMillis = Date.UTC(2000, 0, 1, 0, 0, 0, 0);
-    const generator = new Generator({
+    const crystal = new Crystal({
       epoch: customEpochMillis,
       timeBits: 40,
     });
 
-    const id = generator.generate();
+    const id = crystal.newId();
 
-    assert.equal(generator.epoch().getTime(), customEpochMillis);
-    assert.equal(generator.timeBits(), 40);
+    assert.equal(crystal.epoch().getTime(), customEpochMillis);
+    assert.equal(crystal.timeBits(), 40);
     assert.ok(Math.abs(Date.now() - id.time().getTime()) < 1_000);
   });
 
   test('uses defaults for constructor options', () => {
-    const generator = new Generator();
+    const crystal = new Crystal();
 
-    assert.equal(generator.epochMillis(), DEFAULT_EPOCH_MILLIS);
-    assert.equal(generator.timeBits(), DEFAULT_TIME_BITS);
+    assert.equal(crystal.epochMillis(), DEFAULT_EPOCH_MILLIS);
+    assert.equal(crystal.timeBits(), DEFAULT_TIME_BITS);
   });
 
   test('clamps constructor timeBits into supported range', () => {
-    const high = new Generator({ timeBits: 100 });
-    const low = new Generator({ timeBits: 0 });
+    const high = new Crystal({ timeBits: 100 });
+    const low = new Crystal({ timeBits: 0 });
 
     assert.equal(high.timeBits(), 48);
     assert.equal(low.timeBits(), 40);
   });
 
   test('produced IDs have valid bit allocation', () => {
-    const generator = new Generator();
-    const id = generator.generate().toBigInt();
+    const crystal = new Crystal();
+    const id = crystal.newId().toBigInt();
 
-    const stepBits = BigInt(63 - generator.timeBits());
+    const stepBits = BigInt(63 - crystal.timeBits());
     const stepMask = (1n << stepBits) - 1n;
     const step = id & stepMask;
     const timestamp = id >> stepBits;
-    const realMillis = timestamp + BigInt(generator.epochMillis());
+    const realMillis = timestamp + BigInt(crystal.epochMillis());
 
     assert.ok(step <= stepMask);
 
@@ -104,11 +104,11 @@ describe('crystal', { concurrency: false }, () => {
   });
 
   test('remains unique across async generation bursts', async () => {
-    const generator = new Generator();
+    const crystal = new Crystal();
     const total = 10_000;
     const ids = await Promise.all(
       Array.from({ length: total }, () =>
-        Promise.resolve().then(() => generator.generate().toBigInt().toString()),
+        Promise.resolve().then(() => crystal.newId().toBigInt().toString()),
       ),
     );
 
