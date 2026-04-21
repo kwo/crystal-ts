@@ -3,13 +3,12 @@
 A minimal unique ID generator for TypeScript.
 
 Crystal generates 63-bit unique identifiers optimized for distributed systems.
-It combines a millisecond timestamp and a seeded sequence counter into a single
-sortable ID.
+It combines a millisecond timestamp and a per-millisecond sequence counter into
+a single sortable ID.
 
 > [!NOTE]
 > This repository is a TypeScript port of the Go implementation at
-> https://github.com/kwo/crystal. The implementation is in progress, and the
-> API examples below document the intended TypeScript shape.
+> https://github.com/kwo/crystal.
 
 ## ID Format
 
@@ -36,30 +35,23 @@ Default bit ranges:
 With defaults, each generator can emit `2,097,152` unique IDs per millisecond.
 Changing `timeBits` trades timestamp range for per-millisecond throughput.
 
-## Seed Material
-
-The generator derives seed material from `SHA-256(hostname || PID)` and mixes it
-with cryptographic randomness to initialize the sequence value each millisecond.
-That helps independent processes diverge naturally even when started at the same
-moment.
-
 ## Sequence Number
 
-The sequence starts from a random, node-seeded value each millisecond and
-increments per generated ID. If the sequence space is exhausted in the same
-millisecond, generation pauses until the clock advances.
+The sequence starts at `0` each millisecond and increments per generated ID. If
+the sequence space is exhausted in the same millisecond, generation pauses
+until the clock advances.
 
 ## Clock Rollback Protection
 
-If the system clock moves backwards, the generator continues from the last known
-timestamp and increments sequence values, preserving monotonic ordering.
+If the system clock moves backwards, the generator continues from the last
+known timestamp and increments sequence values, preserving monotonic ordering.
 
 ## ID Representations
 
-IDs are intended to be used either as a string or as an integer value.
+IDs can be used as a string or as an integer value.
 
-- **Base32 string** (default): 13 characters using lowercase Crockford alphabet
-  `0123456789abcdefghjkmnpqrstvwxyz`
+- **Base32 string** (default): 13 characters using the lowercase Crockford
+  alphabet `0123456789abcdefghjkmnpqrstvwxyz`
 - **Hex string**: 16 lowercase hexadecimal characters
 - **Integer ID**: 63-bit integer returned as `bigint` via `id.toBigInt()`
 
@@ -93,17 +85,8 @@ console.log('ID time:    ', id.time());
 Defaults (no configuration required):
 
 - **epoch**: `2020-01-01T00:00:00.000Z` (January 1, 2020 UTC)
-- **timeBits**: `42` (allowed range when overridden: `40..48`)
-
-```ts
-import { Crystal } from '@kwo1/crystal';
-
-// Uses default epoch (2020-01-01T00:00:00.000Z) and default timeBits (42)
-const crystal = new Crystal();
-const id = crystal.newId();
-```
-
-Override only when you need a different layout:
+- **timeBits**: `42` (allowed range when overridden: `40..48`; values outside
+  this range throw)
 
 ```ts
 import { Crystal } from '@kwo1/crystal';
@@ -121,10 +104,16 @@ const id = crystal.newId();
 ```ts
 import { ID } from '@kwo1/crystal';
 
-const a = ID.parseString('0d6av3w2kc002'); // alias of parseBase32
-const b = ID.parseBase32('0d6av3w2kc002');
-const c = ID.parseHex('00ff11aa22bb33cc');
-const d = ID.parseInt64(237755712226918401n);
+const a = ID.parseBase32('0d6av3w2kc002');
+const b = ID.parseHex('00ff11aa22bb33cc');
+const c = ID.parseInt64(237755712226918401n);
+```
+
+If the ID was generated with a custom epoch or `timeBits`, pass the same
+options to the parse method so `id.time()` decodes correctly:
+
+```ts
+ID.parseBase32('0d6av3w2kc002', { epoch: customEpoch, timeBits: 40 });
 ```
 
 ## Time Bits
@@ -133,6 +122,7 @@ Assuming milliseconds since `2020-01-01T00:00:00.000Z`:
 
 | Bits |      Max value (ms) | Max UTC date/time         | Range (years, months) |
 | ---: | ------------------: | ------------------------- | --------------------- |
+|   40 |   1,099,511,627,775 | 2054-11-09T07:00,51.775Z  | 34y 10m               |
 |   41 |   2,199,023,255,551 | 2089-09-06T15:47:35.551Z  | 69y 8m                |
 |   42 |   4,398,046,511,103 | 2159-05-15T07:35:11.103Z  | 139y 4m               |
 |   43 |   8,796,093,022,207 | 2298-09-26T15:10:22.207Z  | 278y 8m               |

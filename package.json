@@ -1,6 +1,6 @@
 {
   "name": "@kwo1/crystal",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "A minimal unique ID generator for TypeScript.",
   "private": false,
   "publishConfig": {
@@ -22,16 +22,16 @@
   },
   "scripts": {
     "clean": "rimraf ./dist",
-    "compile": "tsc -p tsconfig.json --noEmit false --declaration true --outDir ./dist",
+    "compile": "tsc --project tsconfig.json --noEmit false",
     "build": "run-s lint clean compile",
     "lint": "run-s lint:format lint:code",
-    "lint:format": "prettier -c ./src ./examples ./package.json ./tsconfig.json ./eslint.config.js",
-    "lint:format:fix": "prettier -w ./src ./examples ./package.json ./tsconfig.json ./eslint.config.js",
+    "lint:format": "prettier -c ./src ./test ./examples ./package.json ./tsconfig.json ./eslint.config.js",
+    "lint:format:fix": "prettier -w ./src ./test ./examples ./package.json ./tsconfig.json ./eslint.config.js",
     "lint:code": "run-s lint:eslint lint:types",
     "lint:code:fix": "eslint . --fix",
     "lint:eslint": "eslint .",
     "lint:types": "tsc -p tsconfig.json",
-    "test": "tsx --test 'src/**/*.test.ts'",
+    "test": "tsx --test 'test/**/*.test.ts'",
     "example": "tsx examples/basic.ts",
     "prepack": "npm run build"
   },

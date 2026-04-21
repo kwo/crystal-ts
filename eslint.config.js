@@ -8,7 +8,9 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        project: true,
+        projectService: {
+          allowDefaultProject: ['test/*.ts', 'examples/*.ts'],
+        },
         tsconfigRootDir: import.meta.dirname,
         ecmaFeatures: {
           impliedStrict: true,
@@ -24,25 +26,10 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    files: ['**/*.test.ts'],
-    languageOptions: {
-      parserOptions: {
-        project: false,
-      },
-    },
+    files: ['test/**/*.ts'],
     rules: {
-      ...tseslint.configs.disableTypeChecked.rules,
       '@typescript-eslint/no-floating-promises': 'off',
     },
-  },
-  {
-    files: ['examples/**/*.ts'],
-    languageOptions: {
-      parserOptions: {
-        project: false,
-      },
-    },
-    ...tseslint.configs.disableTypeChecked,
   },
   {
     rules: {
@@ -60,9 +47,6 @@ export default tseslint.config(
       'block-scoped-var': ['error'],
       yoda: ['warn', 'never'],
       '@typescript-eslint/no-unused-vars': ['error'],
-      '@typescript-eslint/no-unnecessary-condition': ['off'],
-      '@typescript-eslint/no-unnecessary-boolean-literal-compare': ['off'],
-      '@typescript-eslint/no-unnecessary-type-conversion': ['off'],
     },
   },
 );

@@ -11,5 +11,5 @@ console.log('hex:   ', id.toHex());
 console.log('int:   ', id.toBigInt());
 console.log('time:  ', id.time().toISOString());
 
-const parsed = ID.parseString(id.toString());
+const parsed = ID.parseBase32(id.toString());
 console.log('roundtrip equal:', parsed.toBigInt() === id.toBigInt());
