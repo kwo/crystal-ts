@@ -118,11 +118,12 @@ const id = gen.generate();
 ### Parsing
 
 ```ts
-import { parseBase32, parseHex, parseString } from '@kwo1/crystal';
+import { parseBase32, parseHex, parseInt64, parseString } from '@kwo1/crystal';
 
 const a = parseString('0d6av3w2kc002'); // alias of parseBase32
 const b = parseBase32('0d6av3w2kc002');
 const c = parseHex('00ff11aa22bb33cc');
+const d = parseInt64(237755712226918401n);
 ```
 
 ## Time Bits
@@ -146,7 +147,12 @@ Assuming milliseconds since `2020-01-01T00:00:00.000Z`:
 - `npm run lint:format:fix` - format files with Prettier
 - `npm run lint:code:fix` - run ESLint with auto-fix
 - `npm run test` - run tests
+- `npm run example` - run the example program
 - `npm run build` - lint, clean, and compile to `dist/`
+
+## Example
+
+See [`examples/basic.ts`](./examples/basic.ts) for a working usage example.
 
 ## License
 

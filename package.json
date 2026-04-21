@@ -19,16 +19,17 @@
   },
   "scripts": {
     "clean": "rimraf ./dist",
-    "compile": "tsc -p tsconfig.build.json",
+    "compile": "tsc -p tsconfig.json --noEmit false --declaration true --outDir ./dist",
     "build": "run-s lint clean compile",
     "lint": "run-s lint:format lint:code",
-    "lint:format": "prettier -c ./src ./package.json ./tsconfig.json ./tsconfig.build.json ./eslint.config.js",
-    "lint:format:fix": "prettier -w ./src ./package.json ./tsconfig.json ./tsconfig.build.json ./eslint.config.js",
+    "lint:format": "prettier -c ./src ./examples ./package.json ./tsconfig.json ./eslint.config.js",
+    "lint:format:fix": "prettier -w ./src ./examples ./package.json ./tsconfig.json ./eslint.config.js",
     "lint:code": "run-s lint:eslint lint:types",
     "lint:code:fix": "eslint . --fix",
     "lint:eslint": "eslint .",
     "lint:types": "tsc -p tsconfig.json",
-    "test": "tsx --test 'src/**/*.test.ts'"
+    "test": "tsx --test 'src/**/*.test.ts'",
+    "example": "tsx examples/basic.ts"
   },
   "keywords": [],
   "engines": {

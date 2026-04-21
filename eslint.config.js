@@ -25,9 +25,24 @@ export default tseslint.config(
   },
   {
     files: ['**/*.test.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: false,
+      },
+    },
     rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
       '@typescript-eslint/no-floating-promises': 'off',
     },
+  },
+  {
+    files: ['examples/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: false,
+      },
+    },
+    ...tseslint.configs.disableTypeChecked,
   },
   {
     rules: {
