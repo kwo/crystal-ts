@@ -1,0 +1,50 @@
+{
+  "name": "@kwo1/crystal",
+  "version": "1.0.0",
+  "description": "A minimal unique ID generator for TypeScript.",
+  "private": false,
+  "type": "module",
+  "author": "Karl Ostendorf <karl@ostendorf.com>",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "compile": "tsc -p tsconfig.build.json",
+    "build": "run-s lint clean compile",
+    "lint": "run-s lint:format lint:code",
+    "lint:format": "prettier -c ./src ./package.json ./tsconfig.json ./tsconfig.build.json ./eslint.config.js",
+    "lint:format:fix": "prettier -w ./src ./package.json ./tsconfig.json ./tsconfig.build.json ./eslint.config.js",
+    "lint:code": "run-s lint:eslint lint:types",
+    "lint:code:fix": "eslint . --fix",
+    "lint:eslint": "eslint .",
+    "lint:types": "tsc -p tsconfig.json",
+    "test": "tsx --test 'src/**/*.test.ts'"
+  },
+  "keywords": [],
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "22.15.21",
+    "@typescript-eslint/eslint-plugin": "8.59.0",
+    "@typescript-eslint/parser": "8.59.0",
+    "eslint": "10.2.1",
+    "npm-run-all": "4.1.5",
+    "prettier": "3.8.3",
+    "rimraf": "6.1.3",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.59.0"
+  }
+}
