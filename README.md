@@ -106,24 +106,25 @@ const id = gen.generate();
 Override only when you need a different layout:
 
 ```ts
-import { Generator, setEpoch, setTimeBits } from '@kwo1/crystal';
+import { Generator } from '@kwo1/crystal';
 
-setEpoch(new Date('2020-01-01T00:00:00.000Z'));
-setTimeBits(42);
+const gen = new Generator({
+  epoch: new Date('2020-01-01T00:00:00.000Z'),
+  timeBits: 42,
+});
 
-const gen = new Generator();
 const id = gen.generate();
 ```
 
 ### Parsing
 
 ```ts
-import { parseBase32, parseHex, parseInt64, parseString } from '@kwo1/crystal';
+import { ID } from '@kwo1/crystal';
 
-const a = parseString('0d6av3w2kc002'); // alias of parseBase32
-const b = parseBase32('0d6av3w2kc002');
-const c = parseHex('00ff11aa22bb33cc');
-const d = parseInt64(237755712226918401n);
+const a = ID.parseString('0d6av3w2kc002'); // alias of parseBase32
+const b = ID.parseBase32('0d6av3w2kc002');
+const c = ID.parseHex('00ff11aa22bb33cc');
+const d = ID.parseInt64(237755712226918401n);
 ```
 
 ## Time Bits

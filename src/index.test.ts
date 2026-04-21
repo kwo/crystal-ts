@@ -1,30 +1,11 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  DEFAULT_EPOCH_MILLIS,
-  DEFAULT_TIME_BITS,
-  Generator,
-  getEpochMillis,
-  getTimeBits,
-  parseBase32,
-  parseHex,
-  parseInt64,
-  parseString,
-  setEpoch,
-  setTimeBits,
-} from './index.js';
+import { DEFAULT_EPOCH_MILLIS, DEFAULT_TIME_BITS, Generator, ID } from './index.js';
 
 const generationCount = 1_000;
 
-function resetDefaults(): void {
-  setEpoch(DEFAULT_EPOCH_MILLIS);
-  setTimeBits(DEFAULT_TIME_BITS);
-}
-
 describe('crystal', { concurrency: false }, () => {
   test('generates unique and increasing IDs', () => {
-    resetDefaults();
-
     const generator = new Generator();
     const ids = Array.from({ length: generationCount }, () => generator.generate());
 
@@ -41,8 +22,6 @@ describe('crystal', { concurrency: false }, () => {
   });
 
   test('ID exposes string and integer representations', () => {
-    resetDefaults();
-
     const id = new Generator().generate();
 
     assert.ok(id.toString().length > 0);
@@ -52,67 +31,69 @@ describe('crystal', { concurrency: false }, () => {
   });
 
   test('parses base32 and hex IDs', () => {
-    resetDefaults();
-
     const id = new Generator().generate();
 
-    assert.equal(parseString(id.toString()).toBigInt(), id.toBigInt());
-    assert.equal(parseBase32(id.base32()).toBigInt(), id.toBigInt());
-    assert.equal(parseHex(id.hex()).toBigInt(), id.toBigInt());
-    assert.equal(parseInt64(id.toBigInt()).toBigInt(), id.toBigInt());
+    assert.equal(ID.parseString(id.toString()).toBigInt(), id.toBigInt());
+    assert.equal(ID.parseBase32(id.base32()).toBigInt(), id.toBigInt());
+    assert.equal(ID.parseHex(id.hex()).toBigInt(), id.toBigInt());
+    assert.equal(ID.parseInt64(id.toBigInt()).toBigInt(), id.toBigInt());
   });
 
   test('rejects invalid parse input', () => {
-    assert.throws(() => parseString('invalid!@#'));
-    assert.throws(() => parseBase32('invalid!@#'));
-    assert.throws(() => parseBase32('000G40R40M30E'));
-    assert.throws(() => parseHex('zzzz'));
-    assert.throws(() => parseInt64(Number.MAX_SAFE_INTEGER + 1));
+    assert.throws(() => ID.parseString('invalid!@#'));
+    assert.throws(() => ID.parseBase32('invalid!@#'));
+    assert.throws(() => ID.parseBase32('000G40R40M30E'));
+    assert.throws(() => ID.parseHex('zzzz'));
+    assert.throws(() => ID.parseInt64(Number.MAX_SAFE_INTEGER + 1));
   });
 
   test('supports signed int64 parse and formatting roundtrips', () => {
-    const negative = parseInt64(-1n);
+    const negative = ID.parseInt64(-1n);
 
     assert.equal(negative.toHex(), 'ffffffffffffffff');
-    assert.equal(parseHex('ffffffffffffffff').toBigInt(), -1n);
-    assert.equal(parseHex(negative.toHex()).toBigInt(), -1n);
-    assert.equal(parseBase32(negative.toString()).toBigInt(), -1n);
+    assert.equal(ID.parseHex('ffffffffffffffff').toBigInt(), -1n);
+    assert.equal(ID.parseHex(negative.toHex()).toBigInt(), -1n);
+    assert.equal(ID.parseBase32(negative.toString()).toBigInt(), -1n);
   });
 
-  test('supports epoch and timeBits overrides', () => {
+  test('supports constructor options for epoch and timeBits', () => {
     const customEpochMillis = Date.UTC(2000, 0, 1, 0, 0, 0, 0);
-    setEpoch(customEpochMillis);
-    setTimeBits(40);
+    const generator = new Generator({
+      epoch: customEpochMillis,
+      timeBits: 40,
+    });
 
-    const generator = new Generator();
     const id = generator.generate();
 
     assert.equal(generator.epoch().getTime(), customEpochMillis);
+    assert.equal(generator.timeBits(), 40);
     assert.ok(Math.abs(Date.now() - id.time().getTime()) < 1_000);
-
-    resetDefaults();
   });
 
-  test('clamps timeBits into supported range', () => {
-    setTimeBits(100);
-    assert.equal(getTimeBits(), 48);
+  test('uses defaults for constructor options', () => {
+    const generator = new Generator();
 
-    setTimeBits(0);
-    assert.equal(getTimeBits(), 40);
+    assert.equal(generator.epochMillis(), DEFAULT_EPOCH_MILLIS);
+    assert.equal(generator.timeBits(), DEFAULT_TIME_BITS);
+  });
 
-    resetDefaults();
+  test('clamps constructor timeBits into supported range', () => {
+    const high = new Generator({ timeBits: 100 });
+    const low = new Generator({ timeBits: 0 });
+
+    assert.equal(high.timeBits(), 48);
+    assert.equal(low.timeBits(), 40);
   });
 
   test('produced IDs have valid bit allocation', () => {
-    resetDefaults();
+    const generator = new Generator();
+    const id = generator.generate().toBigInt();
 
-    const id = new Generator().generate().toBigInt();
-
-    const stepBits = BigInt(63 - getTimeBits());
+    const stepBits = BigInt(63 - generator.timeBits());
     const stepMask = (1n << stepBits) - 1n;
     const step = id & stepMask;
     const timestamp = id >> stepBits;
-    const realMillis = timestamp + BigInt(getEpochMillis());
+    const realMillis = timestamp + BigInt(generator.epochMillis());
 
     assert.ok(step <= stepMask);
 
@@ -123,8 +104,6 @@ describe('crystal', { concurrency: false }, () => {
   });
 
   test('remains unique across async generation bursts', async () => {
-    resetDefaults();
-
     const generator = new Generator();
     const total = 10_000;
     const ids = await Promise.all(

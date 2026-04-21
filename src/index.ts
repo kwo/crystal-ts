@@ -2,6 +2,10 @@ import { createHash, randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
 
 const TOTAL_BITS = 63;
+const BASE32_LENGTH = 13;
+const HEX_LENGTH = 16;
+const CROCKFORD_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
+
 export const MIN_TIME_BITS = 40;
 export const MAX_TIME_BITS = 48;
 export const DEFAULT_TIME_BITS = 42;
@@ -10,21 +14,39 @@ export const DEFAULT_EPOCH_MILLIS = 1_577_836_800_000; // 2020-01-01T00:00:00.00
 const MIN_INT64 = -(1n << 63n);
 const MAX_INT64 = (1n << 63n) - 1n;
 const MAX_UINT64 = (1n << 64n) - 1n;
-const BASE32_LENGTH = 13;
-const HEX_LENGTH = 16;
-const CROCKFORD_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
-
-let epochMillisValue = DEFAULT_EPOCH_MILLIS;
-let timeBitsValue = DEFAULT_TIME_BITS;
 
 const base32DecodeMap = buildBase32DecodeMap();
 
+export type EpochInput = Date | number | bigint;
+
+export interface CrystalOptions {
+  readonly epoch?: EpochInput;
+  readonly timeBits?: number;
+}
+
+interface ResolvedOptions {
+  readonly epochMillis: number;
+  readonly timeBits: number;
+  readonly timeShift: bigint;
+  readonly stepMask: bigint;
+  readonly stepSeedMask: bigint;
+}
+
 export class ID {
   readonly #value: bigint;
+  readonly #epochMillis: number;
+  readonly #timeShift: bigint;
 
-  public constructor(value: bigint) {
+  public constructor(
+    value: bigint,
+    epochMillis = DEFAULT_EPOCH_MILLIS,
+    timeBits = DEFAULT_TIME_BITS,
+  ) {
     assertIDRange(value);
+
     this.#value = value;
+    this.#epochMillis = epochMillis;
+    this.#timeShift = BigInt(TOTAL_BITS - clampTimeBits(timeBits));
   }
 
   public int64(): bigint {
@@ -36,7 +58,7 @@ export class ID {
   }
 
   public time(): Date {
-    const millis = Number((this.#value >> currentTimeShift()) + BigInt(epochMillisValue));
+    const millis = Number((this.#value >> this.#timeShift) + BigInt(this.#epochMillis));
     return new Date(millis);
   }
 
@@ -55,180 +77,190 @@ export class ID {
   public toString(): string {
     return this.base32();
   }
+
+  public static parseInt64(value: bigint | number, options: CrystalOptions = {}): ID {
+    const resolved = resolveOptions(options);
+
+    if (typeof value === 'number') {
+      if (!Number.isSafeInteger(value)) {
+        throw new Error('number input exceeds safe integer range, use bigint instead');
+      }
+
+      return new ID(BigInt(value), resolved.epochMillis, resolved.timeBits);
+    }
+
+    return new ID(value, resolved.epochMillis, resolved.timeBits);
+  }
+
+  public static parseString(value: string, options: CrystalOptions = {}): ID {
+    return ID.parseBase32(value, options);
+  }
+
+  public static parseBase32(value: string, options: CrystalOptions = {}): ID {
+    if (value.length !== BASE32_LENGTH) {
+      throw new Error(`invalid base32 length: ${String(value.length)}`);
+    }
+
+    let result = 0n;
+    for (const char of value) {
+      const mapped = base32DecodeMap.get(char);
+      if (mapped === undefined) {
+        throw new Error(`invalid base32 character: ${char}`);
+      }
+
+      result = (result << 5n) | mapped;
+    }
+
+    if (result > MAX_UINT64) {
+      throw new Error('base32 value is out of range for crystal ID');
+    }
+
+    const resolved = resolveOptions(options);
+    return new ID(uint64ToInt64(result), resolved.epochMillis, resolved.timeBits);
+  }
+
+  public static parseHex(value: string, options: CrystalOptions = {}): ID {
+    if (value.length !== HEX_LENGTH) {
+      throw new Error(`invalid hex length: ${String(value.length)}`);
+    }
+
+    if (!/^[\da-fA-F]+$/u.test(value)) {
+      throw new Error('invalid hex input');
+    }
+
+    const resolved = resolveOptions(options);
+    return new ID(uint64ToInt64(BigInt(`0x${value}`)), resolved.epochMillis, resolved.timeBits);
+  }
 }
 
 export class Generator {
-  #step: bigint;
-  #lastMillis: number;
+  readonly #epochMillis: number;
+  readonly #timeBits: number;
+  readonly #timeShift: bigint;
+  readonly #stepMask: bigint;
+  readonly #stepSeedMask: bigint;
   readonly #seed: Buffer;
 
-  public constructor() {
-    const seed = calculateNodeSeed();
+  #step: bigint;
+  #lastMillis: number;
 
-    this.#seed = seed;
-    this.#step = initCounter(seed);
-    this.#lastMillis = epochMillis();
+  public constructor(options: CrystalOptions = {}) {
+    const resolved = resolveOptions(options);
+
+    this.#epochMillis = resolved.epochMillis;
+    this.#timeBits = resolved.timeBits;
+    this.#timeShift = resolved.timeShift;
+    this.#stepMask = resolved.stepMask;
+    this.#stepSeedMask = resolved.stepSeedMask;
+
+    this.#seed = calculateNodeSeed();
+    this.#step = initCounter(this.#seed, this.#stepSeedMask);
+    this.#lastMillis = this.epochMillisNow();
   }
 
-  // eslint-disable-next-line class-methods-use-this
   public epoch(): Date {
-    return new Date(epochMillisValue);
+    return new Date(this.#epochMillis);
+  }
+
+  public epochMillis(): number {
+    return this.#epochMillis;
+  }
+
+  public timeBits(): number {
+    return this.#timeBits;
   }
 
   public generate(): ID {
-    let now = epochMillis();
-
-    const mask = currentStepMask();
-    const shift = currentTimeShift();
+    let now = this.epochMillisNow();
 
     if (now < this.#lastMillis) {
       now = this.#lastMillis;
     }
 
     if (now === this.#lastMillis) {
-      this.#step = (this.#step + 1n) & mask;
+      this.#step = (this.#step + 1n) & this.#stepMask;
       if (this.#step === 0n) {
         do {
-          now = epochMillis();
+          now = this.epochMillisNow();
         } while (now <= this.#lastMillis);
 
-        this.#step = initCounter(this.#seed);
+        this.#step = initCounter(this.#seed, this.#stepSeedMask);
       }
     } else {
-      this.#step = initCounter(this.#seed);
+      this.#step = initCounter(this.#seed, this.#stepSeedMask);
     }
 
     this.#lastMillis = now;
 
-    return new ID((BigInt(now) << shift) | (this.#step & mask));
+    return new ID(
+      (BigInt(now) << this.#timeShift) | (this.#step & this.#stepMask),
+      this.#epochMillis,
+      this.#timeBits,
+    );
+  }
+
+  private epochMillisNow(): number {
+    const millis = Date.now() - this.#epochMillis;
+    if (millis < 0) {
+      return 0;
+    }
+
+    return millis;
   }
 }
 
-export function setEpoch(epoch: Date | number | bigint): void {
-  let millis: number;
+function resolveOptions(options: CrystalOptions): ResolvedOptions {
+  const epochMillis = resolveEpochMillis(options.epoch);
+  const timeBits = resolveTimeBits(options.timeBits);
+  const stepBits = TOTAL_BITS - timeBits;
+  const timeShift = BigInt(stepBits);
+  const stepMask = (1n << timeShift) - 1n;
+  const stepSeedMask = stepBits <= 1 ? 0n : (1n << BigInt(stepBits - 1)) - 1n;
 
-  if (typeof epoch === 'bigint') {
-    millis = Number(epoch);
-  } else if (epoch instanceof Date) {
-    millis = epoch.getTime();
-  } else {
-    millis = epoch;
+  return {
+    epochMillis,
+    timeBits,
+    timeShift,
+    stepMask,
+    stepSeedMask,
+  };
+}
+
+function resolveEpochMillis(epoch: EpochInput | undefined): number {
+  if (epoch === undefined) {
+    return DEFAULT_EPOCH_MILLIS;
   }
 
-  if (!Number.isFinite(millis) || !Number.isInteger(millis)) {
+  if (epoch instanceof Date) {
+    return assertEpochMillis(epoch.getTime());
+  }
+
+  if (typeof epoch === 'bigint') {
+    const asNumber = Number(epoch);
+    return assertEpochMillis(asNumber);
+  }
+
+  return assertEpochMillis(epoch);
+}
+
+function assertEpochMillis(value: number): number {
+  if (!Number.isFinite(value) || !Number.isInteger(value)) {
     throw new Error('epoch must be an integer millisecond value');
   }
 
-  epochMillisValue = millis;
+  return value;
 }
 
-export function getEpoch(): Date {
-  return new Date(epochMillisValue);
-}
+function resolveTimeBits(timeBits: number | undefined): number {
+  if (timeBits === undefined) {
+    return DEFAULT_TIME_BITS;
+  }
 
-export function getEpochMillis(): number {
-  return epochMillisValue;
-}
-
-export function setTimeBits(timeBits: number): void {
   if (!Number.isInteger(timeBits)) {
     throw new Error('timeBits must be an integer');
   }
 
-  timeBitsValue = clampTimeBits(timeBits);
-}
-
-export function getTimeBits(): number {
-  return timeBitsValue;
-}
-
-export function parseInt64(value: bigint | number): ID {
-  if (typeof value === 'number') {
-    if (!Number.isSafeInteger(value)) {
-      throw new Error('number input exceeds safe integer range, use bigint instead');
-    }
-
-    return new ID(BigInt(value));
-  }
-
-  return new ID(value);
-}
-
-export function parseString(value: string): ID {
-  return parseBase32(value);
-}
-
-export function parseBase32(value: string): ID {
-  if (value.length !== BASE32_LENGTH) {
-    throw new Error(`invalid base32 length: ${String(value.length)}`);
-  }
-
-  let result = 0n;
-  for (const char of value) {
-    const mapped = base32DecodeMap.get(char);
-    if (mapped === undefined) {
-      throw new Error(`invalid base32 character: ${char}`);
-    }
-
-    result = (result << 5n) | mapped;
-  }
-
-  if (result > MAX_UINT64) {
-    throw new Error('base32 value is out of range for crystal ID');
-  }
-
-  return new ID(uint64ToInt64(result));
-}
-
-export function parseHex(value: string): ID {
-  if (value.length !== HEX_LENGTH) {
-    throw new Error(`invalid hex length: ${String(value.length)}`);
-  }
-
-  if (!/^[\da-fA-F]+$/u.test(value)) {
-    throw new Error('invalid hex input');
-  }
-
-  return new ID(uint64ToInt64(BigInt(`0x${value}`)));
-}
-
-function epochMillis(): number {
-  const millis = Date.now() - epochMillisValue;
-  if (millis < 0) {
-    return 0;
-  }
-
-  return millis;
-}
-
-function normalizedTimeBits(): number {
-  return clampTimeBits(timeBitsValue);
-}
-
-function currentStepBits(): number {
-  const bits = TOTAL_BITS - normalizedTimeBits();
-  if (bits < 1) {
-    return 1;
-  }
-
-  return bits;
-}
-
-function currentTimeShift(): bigint {
-  return BigInt(currentStepBits());
-}
-
-function currentStepMask(): bigint {
-  return (1n << currentTimeShift()) - 1n;
-}
-
-function currentStepSeedMask(): bigint {
-  const bits = currentStepBits();
-  if (bits <= 1) {
-    return 0n;
-  }
-
-  return (1n << BigInt(bits - 1)) - 1n;
+  return clampTimeBits(timeBits);
 }
 
 function calculateNodeSeed(): Buffer {
@@ -251,20 +283,19 @@ function resolveHostname(): string {
   return 'unknown';
 }
 
-function initCounter(seed: Buffer): bigint {
-  const mask = currentStepSeedMask();
-  if (mask === 0n) {
+function initCounter(seed: Buffer, seedMask: bigint): bigint {
+  if (seedMask === 0n) {
     return 0n;
   }
 
   try {
     const rand = randomBytes(32);
     const sum = createHash('sha256').update(seed).update(rand).digest();
-    return bytesToBigInt(sum.subarray(0, 8)) & mask;
+    return bytesToBigInt(sum.subarray(0, 8)) & seedMask;
   } catch {
     const fallbackTime = BigInt(Date.now()) * 1_000_000n;
     const seedPrefix = bytesToBigInt(seed.subarray(0, 8));
-    return (fallbackTime ^ seedPrefix) & mask;
+    return (fallbackTime ^ seedPrefix) & seedMask;
   }
 }
 
@@ -305,6 +336,18 @@ function assertIDRange(value: bigint): void {
   }
 }
 
+function clampTimeBits(value: number): number {
+  if (value < MIN_TIME_BITS) {
+    return MIN_TIME_BITS;
+  }
+
+  if (value > MAX_TIME_BITS) {
+    return MAX_TIME_BITS;
+  }
+
+  return value;
+}
+
 function int64ToUint64(value: bigint): bigint {
   if (value >= 0n) {
     return value;
@@ -320,18 +363,6 @@ function uint64ToInt64(value: bigint): bigint {
 
   if (value > MAX_INT64) {
     return value - (MAX_UINT64 + 1n);
-  }
-
-  return value;
-}
-
-function clampTimeBits(value: number): number {
-  if (value < MIN_TIME_BITS) {
-    return MIN_TIME_BITS;
-  }
-
-  if (value > MAX_TIME_BITS) {
-    return MAX_TIME_BITS;
   }
 
   return value;
