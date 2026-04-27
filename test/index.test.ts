@@ -1,5 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   Crystal,
   DEFAULT_EPOCH_MILLIS,
@@ -28,6 +29,21 @@ describe('crystal', { concurrency: false }, () => {
     assert.equal(id.toHex().length, 16);
     assert.ok(id.toBigInt() > 0n);
     assert.ok(Math.abs(Date.now() - id.time().getTime()) < 5_000);
+  });
+
+  test('uses integer-style Crockford base32 for fixed IDs', () => {
+    const cases = [
+      [0n, '0000000000000'],
+      [1n, '0000000000001'],
+      [31n, '000000000000z'],
+      [32n, '0000000000010'],
+      [418294710850636992n, '0bkgmtb1ttk60'],
+    ] as const;
+
+    for (const [value, expected] of cases) {
+      assert.equal(new ID(value).toString(), expected);
+      assert.equal(ID.parseBase32(expected).toBigInt(), value);
+    }
   });
 
   test('roundtrips through base32, hex, and int64', () => {
@@ -77,6 +93,25 @@ describe('crystal', { concurrency: false }, () => {
     assert.throws(() => new Crystal({ timeBits: 42.5 }));
   });
 
+  test('seeds sequence counter when milliseconds advance', async () => {
+    const starts = new Array<bigint>();
+
+    for (let index = 0; index < 8; index += 1) {
+      const crystal = new Crystal();
+      await sleep(2);
+      starts.push(crystal.newId().toBigInt() & stepMaskFor(crystal.timeBits()));
+    }
+
+    assert.ok(
+      starts.some((step) => step !== 0n),
+      `expected at least one non-zero sequence start, got ${starts.join(', ')}`,
+    );
+    assert.ok(
+      new Set(starts.map(String)).size > 1,
+      `expected multiple distinct sequence starts, got ${starts.join(', ')}`,
+    );
+  });
+
   test('produced IDs have valid bit allocation', () => {
     const crystal = new Crystal();
     const id = crystal.newId().toBigInt();
@@ -89,3 +124,8 @@ describe('crystal', { concurrency: false }, () => {
     assert.ok(realMillis > 0n && realMillis <= now && now - realMillis < 60_000n);
   });
 });
+
+function stepMaskFor(timeBits: number): bigint {
+  const stepBits = BigInt(63 - timeBits);
+  return (1n << stepBits) - 1n;
+}

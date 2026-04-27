@@ -3,8 +3,8 @@
 A minimal unique ID generator for TypeScript.
 
 Crystal generates 63-bit unique identifiers optimized for distributed systems.
-It combines a millisecond timestamp and a per-millisecond sequence counter into
-a single sortable ID.
+It combines a millisecond timestamp and a seeded per-millisecond sequence
+counter into a single sortable ID.
 
 > [!NOTE]
 > This repository is a TypeScript port of the Go implementation at
@@ -18,7 +18,7 @@ The ID is a 63-bit value.
 - `timeBits` bits (default `42`, configurable from `40` to `48`) store a
   millisecond timestamp measured from a configurable epoch
   (default `2020-01-01T00:00:00Z`).
-- Remaining bits (default `21`) store a sequence number.
+- Remaining bits (default `21`) store a seeded sequence number.
 
 ```text
 +---+------------------------------------------+---------------------+
@@ -37,9 +37,19 @@ Changing `timeBits` trades timestamp range for per-millisecond throughput.
 
 ## Sequence Number
 
-The sequence starts at `0` each millisecond and increments per generated ID. If
-the sequence space is exhausted in the same millisecond, generation pauses
-until the clock advances.
+The sequence starts from a node-seeded, cryptographically random value each
+millisecond and increments per generated ID. The initial value is limited to the
+lower half of the sequence range so generation does not start near the rollover
+boundary. If the sequence space is exhausted in the same millisecond,
+generation pauses until the clock advances.
+
+## Seed Material
+
+Each generator hashes the hostname and process ID with SHA-256 to create a node
+seed. Whenever a sequence counter is initialized, that node seed is mixed with
+fresh bytes from Node's cryptographic random source and hashed again. If the
+cryptographic random source is unavailable, the generator falls back to mixing
+the node seed with the current timestamp.
 
 ## Clock Rollback Protection
 
@@ -50,8 +60,9 @@ known timestamp and increments sequence values, preserving monotonic ordering.
 
 IDs can be used as a string or as an integer value.
 
-- **Base32 string** (default): 13 characters using the lowercase Crockford
-  alphabet `0123456789abcdefghjkmnpqrstvwxyz`
+- **Base32 string** (default): 13 characters using an integer-style lowercase
+  Crockford Base32 representation with alphabet
+  `0123456789abcdefghjkmnpqrstvwxyz`
 - **Hex string**: 16 lowercase hexadecimal characters
 - **Integer ID**: 63-bit integer returned as `bigint` via `id.toBigInt()`
 

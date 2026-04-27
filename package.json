@@ -1,6 +1,6 @@
 {
   "name": "@kwo1/crystal",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A minimal unique ID generator for TypeScript.",
   "private": false,
   "publishConfig": {
